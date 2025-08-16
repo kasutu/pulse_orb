@@ -25,16 +25,17 @@ public:
   //--- Update Timezone/Chart Time display
   void UpdateTimeZoneInfo(int offset)
   {
-    datetime gmt = TimeGMT();
-    datetime local = gmt + (offset * 3600);
-    MqlDateTime gmtStruct, localStruct;
-    TimeToStruct(gmt, gmtStruct);
-    TimeToStruct(local, localStruct);
+    datetime localTime = TimeLocal();
+    datetime offsetTime = localTime + (offset * 3600);
+
+    MqlDateTime localStruct, offsetStruct;
+    TimeToStruct(localTime, localStruct);
+    TimeToStruct(offsetTime, offsetStruct);
 
     string tzText = StringFormat(
-        "GMT: %04d-%02d-%02d %02d:%02d | Local: %04d-%02d-%02d %02d:%02d (UTC%+d)",
-        gmtStruct.year, gmtStruct.mon, gmtStruct.day, gmtStruct.hour, gmtStruct.min,
+        "Local: %04d-%02d-%02d %02d:%02d | Offset: %04d-%02d-%02d %02d:%02d (UTC%+d)",
         localStruct.year, localStruct.mon, localStruct.day, localStruct.hour, localStruct.min,
+        offsetStruct.year, offsetStruct.mon, offsetStruct.day, offsetStruct.hour, offsetStruct.min,
         offset);
 
     if (!ObjectCreate(0, m_tzObjectName, OBJ_LABEL, 0, 0, 0))
