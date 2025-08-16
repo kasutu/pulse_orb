@@ -13,6 +13,7 @@ private:
   string m_prefix;
   string m_etaObjectName;
   string m_tzObjectName;
+  string m_volumeObjectName;
 
 public:
   //--- Constructor
@@ -21,6 +22,7 @@ public:
     m_prefix = prefix;
     m_etaObjectName = m_prefix + "ETA_Display";
     m_tzObjectName = m_prefix + "TZ_Display";
+    m_volumeObjectName = m_prefix + "Volume_Display";
   }
   //--- Update Timezone/Chart Time display
   void UpdateTimeZoneInfo(int offset)
@@ -93,6 +95,23 @@ public:
       ObjectSetInteger(0, m_etaObjectName, OBJPROP_YDISTANCE, 35);
       ObjectSetInteger(0, m_etaObjectName, OBJPROP_COLOR, clrYellow);
       ObjectSetInteger(0, m_etaObjectName, OBJPROP_FONTSIZE, 12);
+    }
+  }
+
+  void UpdateVolumeConfirmation(string volumeText)
+  {
+    if (!ObjectCreate(0, m_volumeObjectName, OBJ_LABEL, 0, 0, 0))
+    {
+      ObjectSetString(0, m_volumeObjectName, OBJPROP_TEXT, volumeText);
+    }
+    else
+    {
+      ObjectSetString(0, m_volumeObjectName, OBJPROP_TEXT, volumeText);
+      ObjectSetInteger(0, m_volumeObjectName, OBJPROP_CORNER, CORNER_LEFT_LOWER);
+      ObjectSetInteger(0, m_volumeObjectName, OBJPROP_XDISTANCE, 10);
+      ObjectSetInteger(0, m_volumeObjectName, OBJPROP_YDISTANCE, 50);
+      ObjectSetInteger(0, m_volumeObjectName, OBJPROP_COLOR, clrWhite);
+      ObjectSetInteger(0, m_volumeObjectName, OBJPROP_FONTSIZE, 12);
     }
   }
 

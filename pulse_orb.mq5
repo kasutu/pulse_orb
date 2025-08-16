@@ -13,10 +13,12 @@
 #include "TimeEngine.mqh"
 #include "ProcessORB.mqh"
 
+#include "ORBTradeEntry.mqh"
+
 //--- Input Parameters
 input int InpStartHour = 5;      // Start hour in local time (24-hour format)
 input int InpTimeOffset = 0;     // Time offset from local time (-4 for EDT, -5 for EST)
-input int InpEndHour = 3;       // End hour for horizontal lines (24-hour format)
+input int InpEndHour = 3;        // End hour for horizontal lines (24-hour format)
 input int InpLookbackBars = 400; // Number of bars to look back for historical ORB ranges
 
 //--- Object registry
@@ -133,6 +135,7 @@ void OnTick()
   datetime currentLocal = TimeEngine::GetLocal(InpTimeOffset);
   MqlDateTime localStruct;
   TimeEngine::ToStruct(currentLocal, localStruct);
+  ORBTradeEntry(InpTimeOffset, EA_PREFIX);
 
   //--- Calculate next target time (today's or tomorrow's start hour)
   MqlDateTime todayTargetStruct = localStruct;

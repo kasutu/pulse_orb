@@ -50,6 +50,15 @@ public:
     long vol = iVolume(NULL, m_timeframe, volume_shift);
     return (vol >= sma * m_factor);
   }
+
+  // Returns the volume comparison as a string, e.g., "actual >= expected"
+  string GetVolumeComparisonString(int volume_shift = 0)
+  {
+    double sma = iMA(NULL, m_timeframe, 20, 0, MODE_SMA, MODE_VOLUME, volume_shift);
+    long vol = iVolume(NULL, m_timeframe, volume_shift);
+    double expected = sma * m_factor;
+    return DoubleToString(vol) + " >= " + DoubleToString(expected);
+  }
 };
 
 #endif // __VOLUME_CONFIRMATION_ENGINE_MQH__
