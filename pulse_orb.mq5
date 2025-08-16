@@ -6,16 +6,17 @@
 #property copyright "kasutufx"
 #property link "https://www.mql5.com"
 #property version "1.01"
-#property description "Draw horizontal ORB lines based on configurable time range"
+#property description "Draw horizontal ORB lines based on 15-minute OHLC bar"
 
 //--- Include dashboard
 #include "Dashboard.mqh"
+//--- Include line drawer
+#include "LineDrawer.mqh"
 
 //--- Input Parameters
-input int InpStartHour = 6;     // Start hour in local time (24-hour format)
-input int InpTimeOffset = -4;   // Time offset from GMT (-4 for EDT, -5 for EST)
-input int InpRangeMinutes = 15; // Minutes to calculate price range
-input int InpEndHour = 17;      // End hour for horizontal lines (24-hour format)
+input int InpStartHour = 6;   // Start hour in local time (24-hour format)
+input int InpTimeOffset = -4; // Time offset from GMT (-4 for EDT, -5 for EST)
+input int InpEndHour = 17;    // End hour for horizontal lines (24-hour format)
 
 //--- Object registry
 string objectRegistry[];
@@ -24,6 +25,9 @@ const string EA_PREFIX = "ORB_"; // Prefix for all EA objects
 
 //--- Dashboard instance
 CDashboard *dashboard;
+
+//--- Line drawer instance
+CLineDrawer *lineDrawer;
 
 //+------------------------------------------------------------------+
 //| Add object to registry                                           |
@@ -56,6 +60,9 @@ int OnInit()
   //--- Initialize dashboard
   dashboard = new CDashboard(EA_PREFIX);
 
+  //--- Initialize line drawer
+  lineDrawer = new CLineDrawer(EA_PREFIX);
+
   //--- Rebuild registry from existing objects on chart
   objectCount = 0;
   ArrayResize(objectRegistry, 0);
@@ -82,6 +89,13 @@ void OnDeinit(const int reason)
   {
     delete dashboard;
     dashboard = NULL;
+  }
+
+  //--- Clean up line drawer
+  if (lineDrawer != NULL)
+  {
+    delete lineDrawer;
+    lineDrawer = NULL;
   }
 
   //--- Clean up all registered objects when EA is removed
@@ -134,45 +148,31 @@ void OnTick()
   //--- Calculate target GMT time (start hour converted to GMT)
   datetime targetGMT = currentGMT - (localStruct.hour - InpStartHour) * 3600 - localStruct.min * 60 - localStruct.sec;
 
+  Print("ORB Debug - Current GMT: ", TimeToString(currentGMT),
+        " Current Local: ", TimeToString(currentLocal),
+        " Target GMT: ", TimeToString(targetGMT));
+
   //--- Find closest bar and get its data
   int barIndex = iBarShift(_Symbol, _Period, targetGMT, true);
   if (barIndex < 0)
+  {
+    Print("ERROR: Could not find bar for target time: ", TimeToString(targetGMT));
     return;
+  }
 
   datetime barTime = iTime(_Symbol, _Period, barIndex);
+  Print("ORB Debug - Found bar at index ", barIndex, " with time: ", TimeToString(barTime));
 
-  //--- Calculate price range for the first X minutes from target time
-  datetime rangeEndTime = barTime + (InpRangeMinutes * 60);
-  double highestPrice = 0;
-  double lowestPrice = 0;
-  bool firstBar = true;
+  //--- Get OHLC of the 15-minute bar
+  double highestPrice = iHigh(_Symbol, _Period, barIndex);
+  double lowestPrice = iLow(_Symbol, _Period, barIndex);
+  double openPrice = iOpen(_Symbol, _Period, barIndex);
+  double closePrice = iClose(_Symbol, _Period, barIndex);
 
-  //--- Find all bars within the time range and get high/low
-  for (int i = barIndex; i >= 0; i--)
-  {
-    datetime currentBarTime = iTime(_Symbol, _Period, i);
-    if (currentBarTime < barTime)
-      break; // Stop if we go before target time
-    if (currentBarTime > rangeEndTime)
-      continue; // Skip if after range
-
-    double high = iHigh(_Symbol, _Period, i);
-    double low = iLow(_Symbol, _Period, i);
-
-    if (firstBar)
-    {
-      highestPrice = high;
-      lowestPrice = low;
-      firstBar = false;
-    }
-    else
-    {
-      if (high > highestPrice)
-        highestPrice = high;
-      if (low < lowestPrice)
-        lowestPrice = low;
-    }
-  }
+  Print("ORB Debug - 15min OHLC: Open=", DoubleToString(openPrice, _Digits),
+        " High=", DoubleToString(highestPrice, _Digits),
+        " Low=", DoubleToString(lowestPrice, _Digits),
+        " Close=", DoubleToString(closePrice, _Digits));
 
   //--- Create horizontal line objects
   MqlDateTime endStruct = localStruct;
@@ -182,43 +182,22 @@ void OnTick()
   datetime endLocalTime = StructToTime(endStruct);
   datetime lineEndTime = endLocalTime - (InpTimeOffset * 3600); // Convert local end time to GMT
 
-  string highLineName = EA_PREFIX + "High_" + TimeToString(barTime, TIME_DATE);
-  string lowLineName = EA_PREFIX + "Low_" + TimeToString(barTime, TIME_DATE);
-
-  //--- Check if these lines already exist in registry
-  if (ObjectExistsInRegistry(highLineName) || ObjectExistsInRegistry(lowLineName))
+  //--- Check if lines already exist using line drawer
+  if (lineDrawer != NULL && lineDrawer.LinesExist(barTime))
   {
     lastProcessedDay = localStruct.day_of_year;
     return;
   }
 
-  //--- Create high horizontal line
-  if (!ObjectCreate(0, highLineName, OBJ_TREND, 0, barTime, highestPrice, lineEndTime, highestPrice))
-    return;
+  //--- Use line drawer to create ORB lines
+  if (lineDrawer != NULL)
+  {
+    if (lineDrawer.DrawLines(barTime, highestPrice, lowestPrice, lineEndTime))
+    {
+      lastProcessedDay = localStruct.day_of_year;
+    }
+  }
 
-  //--- Set high line properties
-  ObjectSetInteger(0, highLineName, OBJPROP_COLOR, clrBlue);
-  ObjectSetInteger(0, highLineName, OBJPROP_WIDTH, 2);
-  ObjectSetInteger(0, highLineName, OBJPROP_RAY_LEFT, false);
-  ObjectSetInteger(0, highLineName, OBJPROP_RAY_RIGHT, false);
-  ObjectSetInteger(0, highLineName, OBJPROP_STYLE, STYLE_SOLID);
-
-  //--- Create low horizontal line
-  if (!ObjectCreate(0, lowLineName, OBJ_TREND, 0, barTime, lowestPrice, lineEndTime, lowestPrice))
-    return;
-
-  //--- Set low line properties
-  ObjectSetInteger(0, lowLineName, OBJPROP_COLOR, clrRed);
-  ObjectSetInteger(0, lowLineName, OBJPROP_WIDTH, 2);
-  ObjectSetInteger(0, lowLineName, OBJPROP_RAY_LEFT, false);
-  ObjectSetInteger(0, lowLineName, OBJPROP_RAY_RIGHT, false);
-  ObjectSetInteger(0, lowLineName, OBJPROP_STYLE, STYLE_SOLID);
-
-  //--- Add to registry
-  RegisterObject(highLineName);
-  RegisterObject(lowLineName);
-
-  lastProcessedDay = localStruct.day_of_year;
   ChartRedraw();
 }
 //+------------------------------------------------------------------+
