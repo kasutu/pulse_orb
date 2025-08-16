@@ -6,28 +6,18 @@
 #property copyright "kasutufx"
 #property link "https://www.mql5.com"
 #property version "1.01"
-#property description "Pulse Based EA using ORB + volume, news confirmation"
-
-//--- Include the standard library for trading functions and constants
-#include <Trade/Trade.mqh>
-//--- Utils: object ID registry helpers
-#include "ObjectRegistry.mqh"
+#property description "Draw vertical line at 6AM NY time"
 
 //--- Input Parameters
-input int InpLookback = 100;         // Number of bars to look back from the current bar.
+input int InpNYHour = 6;             // Target hour in New York time (24-hour format)
+input int InpNYOffset = -4;          // NY offset from GMT (-4 for EDT, -5 for EST)
 input double InpLineHeight = 1000.0; // Height of the vertical line in pips
-
-//--- Global Constants
-const string OBJECT_PREFIX = "PulseLine_"; // A unique prefix for objects created by this EA.
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
 {
-  //--- Initialization is straightforward, no special setup needed.
-  // Rebuild local registry in case objects with our prefix already exist
-  RebuildRegistryFromChart(0, OBJECT_PREFIX);
   return (INIT_SUCCEEDED);
 }
 //+------------------------------------------------------------------+
@@ -35,8 +25,8 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-  //--- Clean up all objects created by this EA when it's removed from the chart.
-  ClearByPrefix(0, OBJECT_PREFIX);
+  //--- Clean up all objects when EA is removed
+  ObjectsDeleteAll(0, "VLine_");
   ChartRedraw();
 }
 //+------------------------------------------------------------------+
@@ -44,65 +34,51 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
-  //--- Use a static variable to ensure the drawing logic runs only once per bar.
-  static datetime lastBarTime = 0;
+  //--- Track last processed day to avoid duplicates
+  static int lastProcessedDay = 0;
 
-  //--- Check if a new bar has formed. If not, exit the function to save resources.
-  datetime currentBarTime = iTime(_Symbol, _Period, 0);
-  if (lastBarTime == currentBarTime)
-  {
-    return; // Not a new bar, so we do nothing.
-  }
-  //--- A new bar has formed, so we update our tracker.
-  lastBarTime = currentBarTime;
+  //--- Get current GMT time and calculate NY time
+  datetime currentGMT = TimeGMT();
+  datetime currentNY = currentGMT + (InpNYOffset * 3600);
 
-  //--- Make sure there are enough bars on the chart to satisfy the lookback period.
-  if (Bars(_Symbol, _Period) < InpLookback + 1)
-  {
-    Print("Not enough bars on the chart for the specified lookback of ", InpLookback);
+  MqlDateTime nyStruct;
+  TimeToStruct(currentNY, nyStruct);
+
+  //--- Exit if already processed today or before target hour
+  if (lastProcessedDay == nyStruct.day_of_year || nyStruct.hour < InpNYHour)
     return;
-  }
 
-  //--- Calculate the actual monetary value of one pip for the current symbol.
-  //    This handles both 3/5 and 2/4 digit brokers automatically.
+  //--- Calculate target GMT time (6 AM NY converted to GMT)
+  datetime targetGMT = currentGMT - (nyStruct.hour - InpNYHour) * 3600 - nyStruct.min * 60 - nyStruct.sec;
+
+  //--- Find closest bar and get its data
+  int barIndex = iBarShift(_Symbol, _Period, targetGMT, true);
+  if (barIndex < 0)
+    return;
+
+  datetime barTime = iTime(_Symbol, _Period, barIndex);
+  double barClose = iClose(_Symbol, _Period, barIndex);
+
+  //--- Calculate pip value and line dimensions
   double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
   double pipValue = (digits == 3 || digits == 5) ? 10 * point : point;
-
-  //--- Identify the target bar's index, time, and closing price.
-  int targetBarIndex = InpLookback;
-  datetime targetTime = iTime(_Symbol, _Period, targetBarIndex);
-  double targetClose = iClose(_Symbol, _Period, targetBarIndex);
-
-  //--- Calculate the top and bottom price points for the vertical line.
   double heightInPrice = InpLineHeight * pipValue;
-  double priceTop = targetClose + heightInPrice / 2.0;
-  double priceBottom = targetClose - heightInPrice / 2.0;
 
-  //--- Create a unique name for our line object (KISS: prefix + time).
-  string objectName = OBJECT_PREFIX + (string)targetTime;
+  //--- Create line object
+  string objectName = "VLine_" + TimeToString(barTime, TIME_DATE);
+  ObjectsDeleteAll(0, "VLine_"); // Remove old lines
 
-  //--- To ensure only one line is on the chart, delete any old lines first.
-  ClearByPrefix(0, OBJECT_PREFIX);
-
-  //--- Create a finite vertical line using OBJ_TREND with start and end points.
-  if (!ObjectCreate(0, objectName, OBJ_TREND, 0, targetTime, priceTop, targetTime, priceBottom))
-  {
-    Print("Error creating vertical line object: ", GetLastError());
+  if (!ObjectCreate(0, objectName, OBJ_TREND, 0, barTime, barClose + heightInPrice / 2, barTime, barClose - heightInPrice / 2))
     return;
-  }
 
-  //--- Customize the appearance of the line.
-  ObjectSetInteger(0, objectName, OBJPROP_COLOR, clrDodgerBlue);   // Set line color.
-  ObjectSetInteger(0, objectName, OBJPROP_WIDTH, 2);               // Set line thickness.
-  ObjectSetInteger(0, objectName, OBJPROP_STYLE, STYLE_SOLID);     // Set line style.
-  ObjectSetInteger(0, objectName, OBJPROP_RAY_LEFT, false);        // Disable ray extending to the left.
-  ObjectSetInteger(0, objectName, OBJPROP_RAY_RIGHT, false);       // Disable ray extending to the right.
-  ObjectSetString(0, objectName, OBJPROP_TOOLTIP, "Lookback Bar"); // Add a tooltip on hover.
-                                                                   //--- Track in registry
-  RegisterId(objectName);
+  //--- Set line properties
+  ObjectSetInteger(0, objectName, OBJPROP_COLOR, clrDodgerBlue);
+  ObjectSetInteger(0, objectName, OBJPROP_WIDTH, 2);
+  ObjectSetInteger(0, objectName, OBJPROP_RAY_LEFT, false);
+  ObjectSetInteger(0, objectName, OBJPROP_RAY_RIGHT, false);
 
-  //--- Redraw the chart to make the new line visible immediately.
+  lastProcessedDay = nyStruct.day_of_year;
   ChartRedraw();
 }
 //+------------------------------------------------------------------+
