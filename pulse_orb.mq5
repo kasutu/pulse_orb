@@ -14,9 +14,10 @@
 #include "ProcessORB.mqh"
 
 //--- Input Parameters
-input int InpStartHour = 6;   // Start hour in local time (24-hour format)
-input int InpTimeOffset = -4; // Time offset from GMT (-4 for EDT, -5 for EST)
-input int InpEndHour = 17;    // End hour for horizontal lines (24-hour format)
+input int InpStartHour = 6;      // Start hour in local time (24-hour format)
+input int InpTimeOffset = -4;    // Time offset from local time (-4 for EDT, -5 for EST)
+input int InpEndHour = 17;       // End hour for horizontal lines (24-hour format)
+input int InpLookbackBars = 400; // Number of bars to look back for historical ORB ranges
 
 //--- Object registry
 string objectRegistry[];
@@ -77,8 +78,12 @@ int OnInit()
     }
   }
 
+  //--- Process historical ORB ranges
+  ProcessORB::ProcessHistorical(InpLookbackBars, InpStartHour, InpEndHour, InpTimeOffset, lineDrawer);
+
   return (INIT_SUCCEEDED);
 }
+
 //+------------------------------------------------------------------+
 //| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
@@ -105,29 +110,19 @@ void OnDeinit(const int reason)
   }
   ChartRedraw();
 }
+
 //+------------------------------------------------------------------+
 //| Expert tick function                                             |
 //+------------------------------------------------------------------+
 void OnTick()
 {
-  //--- Track last processed day to avoid duplicates
-  static int lastProcessedDay = 0;
-
   //--- Track 15-minute candle closes
   static datetime lastM15CandleTime = 0;
 
-  //--- Get current GMT and local time using TimeEngine
-  datetime currentGMT = TimeEngine::GetGMT();
+  //--- Get current local time
   datetime currentLocal = TimeEngine::GetLocal(InpTimeOffset);
-  MqlDateTime gmtStruct, localStruct;
-  TimeEngine::ToStruct(currentGMT, gmtStruct);
+  MqlDateTime localStruct;
   TimeEngine::ToStruct(currentLocal, localStruct);
-
-  //--- Reset lastProcessedDay when InpEndHour is reached
-  if (localStruct.hour >= InpEndHour && localStruct.hour < InpStartHour)
-  {
-    lastProcessedDay = 0;
-  }
 
   //--- Calculate next target time (today's or tomorrow's start hour)
   MqlDateTime todayTargetStruct = localStruct;
@@ -139,7 +134,7 @@ void OnTick()
   //--- Update dashboard with ETA
   if (dashboard != NULL)
   {
-    dashboard.UpdateETA(todayTarget, currentGMT);
+    dashboard.UpdateETA(todayTarget, currentLocal);
     dashboard.UpdateTimeZoneInfo(InpTimeOffset);
 
     //--- Register ETA display if not already registered
@@ -158,18 +153,20 @@ void OnTick()
 
     //--- Get the time of the just-closed candle (bar index 1)
     datetime closedCandleTime = TimeEngine::BarOpen(_Symbol, PERIOD_M15, 1);
-    MqlDateTime closedCandleStruct;
-    TimeEngine::ToStruct(closedCandleTime, closedCandleStruct); // Use GMT/UTC
 
-    Print("ORB Stage: 15-min candle closed at ", TimeToString(closedCandleTime), " GMT - Hour: ", closedCandleStruct.hour,
-          " Min: ", closedCandleStruct.min);
+    Print("ORB Stage: 15-min candle closed at ", TimeToString(closedCandleTime));
 
-    //--- Check if this is the target candle (starts at InpStartHour:00 UTC)
-    if (closedCandleStruct.hour == InpStartHour && closedCandleStruct.min == 0 &&
-        lastProcessedDay != closedCandleStruct.day_of_year)
+    //--- Check if this should be processed
+    if (ProcessORB::ShouldProcess(closedCandleTime, InpTimeOffset, InpStartHour))
     {
-      Print("ORB Stage: Target candle detected at UTC - Processing ORB for ", TimeToString(closedCandleTime));
-  ProcessORB(closedCandleTime, closedCandleStruct.day_of_year, InpEndHour, InpTimeOffset, lineDrawer);
+      Print("ORB Stage: Target candle detected - Processing ORB for ", TimeToString(closedCandleTime));
+
+      // Get day of year for local time
+      MqlDateTime localStruct;
+      datetime localTime = TimeEngine::ApplyOffset(closedCandleTime, InpTimeOffset);
+      TimeEngine::ToStruct(localTime, localStruct);
+
+      ProcessORB::Process(closedCandleTime, localStruct.day_of_year, InpEndHour, InpTimeOffset, lineDrawer);
     }
   }
 

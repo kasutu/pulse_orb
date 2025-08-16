@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//| TimeEngine.mqh - Centralized time handling for EA               |
+//| TimeEngine.mqh - Local time-based centralized time handling     |
 //+------------------------------------------------------------------+
 #ifndef __TIMEENGINE_MQH__
 #define __TIMEENGINE_MQH__
@@ -7,28 +7,16 @@
 class TimeEngine
 {
 public:
-  // Get current GMT time
-  static datetime GetGMT()
+  // Get current local time with offset
+  static datetime GetLocal(int offsetHours = 0)
   {
-    return TimeGMT();
+    return TimeLocal() + (offsetHours * 3600);
   }
 
-  // Get current local time (using offset)
-  static datetime GetLocal(int offset)
+  // Apply offset to any datetime
+  static datetime ApplyOffset(datetime time, int offsetHours)
   {
-    return TimeGMT() + (offset * 3600);
-  }
-
-  // Convert GMT datetime to local
-  static datetime GMTToLocal(datetime gmt, int offset)
-  {
-    return gmt + (offset * 3600);
-  }
-
-  // Convert local datetime to GMT
-  static datetime LocalToGMT(datetime local, int offset)
-  {
-    return local - (offset * 3600);
+    return time + (offsetHours * 3600);
   }
 
   // Get MqlDateTime struct for any datetime
@@ -37,25 +25,43 @@ public:
     TimeToStruct(t, s);
   }
 
-  // Get open time of a bar in a given timeframe and index
+  // Get open time of a bar (uses raw GMT bar time)
   static datetime BarOpen(string symbol, ENUM_TIMEFRAMES tf, int index)
   {
     return iTime(symbol, tf, index);
   }
 
-  // Get close time of a bar in a given timeframe and index
+  // Get close time of a bar (uses raw GMT bar time)
   static datetime BarClose(string symbol, ENUM_TIMEFRAMES tf, int index)
   {
     return iTime(symbol, tf, index) + PeriodSeconds(tf);
   }
 
-  // Get hour/minute in GMT or local for a bar
-  static void BarTimeStruct(string symbol, ENUM_TIMEFRAMES tf, int index, int offset, MqlDateTime &gmtStruct, MqlDateTime &localStruct)
+  // Get time struct for a bar with offset applied
+  static void BarTimeStruct(string symbol, ENUM_TIMEFRAMES tf, int index, int offsetHours, MqlDateTime &localStruct)
   {
-    datetime gmt = iTime(symbol, tf, index);
-    TimeToStruct(gmt, gmtStruct);
-    TimeToStruct(GMTToLocal(gmt, offset), localStruct);
+    datetime barTime = BarOpen(symbol, tf, index);
+    datetime localTime = ApplyOffset(barTime, offsetHours);
+    TimeToStruct(localTime, localStruct);
+  }
+
+  // Historical view methods
+  static bool IsTargetHour(string symbol, ENUM_TIMEFRAMES tf, int index, int targetHour, int offsetHours)
+  {
+    MqlDateTime localStruct;
+    BarTimeStruct(symbol, tf, index, offsetHours, localStruct);
+    return (localStruct.hour == targetHour && localStruct.min == 0);
+  }
+
+  static datetime GetHistoricalBar(string symbol, ENUM_TIMEFRAMES tf, int lookbackBars, int targetHour, int offsetHours)
+  {
+    for (int i = lookbackBars; i >= 1; i--)
+    {
+      if (IsTargetHour(symbol, tf, i, targetHour, offsetHours))
+        return BarOpen(symbol, tf, i);
+    }
+    return 0;
   }
 };
 
-#endif
+#endif // __TIMEENGINE_MQH__

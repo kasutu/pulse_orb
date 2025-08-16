@@ -1,62 +1,96 @@
 //+------------------------------------------------------------------+
 //|                    ProcessORB.mqh                                |
-//|   Extracted from pulse_orb.mq5 for modularity                   |
+//|   Refactored for TimeEngine integration and historical handling  |
 //+------------------------------------------------------------------+
 #include "TimeEngine.mqh"
 #include "LineDrawer.mqh"
 
-void ProcessORB(datetime candleTime, int dayOfYear, int endHour, int timeOffset, CLineDrawer *drawer)
+class ProcessORB
 {
-  static int lastProcessedDay = 0;
+private:
+  static int lastProcessedDay;
 
-  //--- Get current local time for line end calculation
-  datetime currentLocal = TimeEngine::GetLocal(timeOffset);
-  MqlDateTime localStruct;
-  TimeEngine::ToStruct(currentLocal, localStruct);
-
-  //--- Find the closed 15-minute bar and get its data
-  int barIndex = iBarShift(_Symbol, PERIOD_M15, candleTime, true);
-  if (barIndex < 0)
+public:
+  // Process single ORB (current or historical)
+  static void Process(datetime candleTime, int dayOfYear, int endHour, int timeOffset, CLineDrawer *drawer)
   {
-    Print("ERROR: Could not find 15-minute bar for candle time: ", TimeToString(candleTime));
-    return;
-  }
-
-  datetime barTime = iTime(_Symbol, PERIOD_M15, barIndex);
-  Print("ORB Stage: Target 15-min bar located at index ", barIndex, " - Next: Extract OHLC data from closed candle at ", TimeToString(barTime));
-
-  //--- Get OHLC of the closed 15-minute bar
-  double highestPrice = iHigh(_Symbol, PERIOD_M15, barIndex);
-  double lowestPrice = iLow(_Symbol, PERIOD_M15, barIndex);
-  double openPrice = iOpen(_Symbol, PERIOD_M15, barIndex);
-  double closePrice = iClose(_Symbol, PERIOD_M15, barIndex);
-
-  //--- Create horizontal line objects
-  MqlDateTime endStruct = localStruct;
-  endStruct.hour = endHour;
-  endStruct.min = 0;
-  endStruct.sec = 0;
-  datetime endLocalTime = StructToTime(endStruct);
-  datetime lineEndTime = endLocalTime - (timeOffset * 3600); // Convert local end time to GMT
-
-  Print("ORB Stage: OHLC data extracted from CLOSED candle - Next: Create horizontal lines from ", TimeToString(barTime), " to ", TimeToString(lineEndTime),
-        " | High=", DoubleToString(highestPrice, _Digits), " Low=", DoubleToString(lowestPrice, _Digits));
-
-  //--- Check if lines already exist using line drawer
-  if (drawer != NULL && drawer.LinesExist(barTime))
-  {
-    lastProcessedDay = dayOfYear;
-    return;
-  }
-
-  //--- Use line drawer to create ORB lines
-  if (drawer != NULL)
-  {
-    if (drawer.DrawLines(barTime, highestPrice, lowestPrice, lineEndTime))
+    // Find bar and validate
+    int barIndex = iBarShift(_Symbol, PERIOD_M15, candleTime, true);
+    if (barIndex < 0)
     {
-      lastProcessedDay = dayOfYear;
-      Print("ORB Stage: Lines created successfully for ", TimeToString(candleTime), " - Processing complete");
+      Print("ERROR: Could not find 15-minute bar for: ", TimeToString(candleTime));
+      return;
+    }
+
+    datetime barTime = TimeEngine::BarOpen(_Symbol, PERIOD_M15, barIndex);
+    Print("ORB: Processing bar at index ", barIndex, " time ", TimeToString(barTime));
+
+    // Extract OHLC
+    double high = iHigh(_Symbol, PERIOD_M15, barIndex);
+    double low = iLow(_Symbol, PERIOD_M15, barIndex);
+
+    // Calculate line end time using TimeEngine
+    datetime lineEndTime = CalculateEndTime(candleTime, endHour, timeOffset);
+
+    Print("ORB: Lines from ", TimeToString(barTime), " to ", TimeToString(lineEndTime),
+          " | H=", DoubleToString(high, _Digits), " L=", DoubleToString(low, _Digits));
+
+    // Check existing and draw
+    if (drawer != NULL && !drawer.LinesExist(barTime))
+    {
+      if (drawer.DrawLines(barTime, high, low, lineEndTime))
+      {
+        lastProcessedDay = dayOfYear;
+        Print("ORB: Lines created successfully");
+      }
     }
   }
-}
-//+------------------------------------------------------------------+
+
+  // Process historical ORBs in range
+  static void ProcessHistorical(int lookbackBars, int startHour, int endHour, int timeOffset, CLineDrawer *drawer)
+  {
+    for (int i = lookbackBars; i >= 1; i--)
+    {
+      if (TimeEngine::IsTargetHour(_Symbol, PERIOD_M15, i, startHour, timeOffset))
+      {
+        datetime barTime = TimeEngine::BarOpen(_Symbol, PERIOD_M15, i);
+        MqlDateTime localStruct;
+        TimeEngine::BarTimeStruct(_Symbol, PERIOD_M15, i, timeOffset, localStruct);
+
+        Process(barTime, localStruct.day_of_year, endHour, timeOffset, drawer);
+      }
+    }
+  }
+
+  // Check if should process new ORB
+  static bool ShouldProcess(datetime candleTime, int timeOffset, int startHour)
+  {
+    MqlDateTime localStruct;
+    datetime localTime = TimeEngine::ApplyOffset(candleTime, timeOffset);
+    TimeEngine::ToStruct(localTime, localStruct);
+
+    bool isTargetTime = (localStruct.hour == startHour && localStruct.min == 0);
+    bool notProcessedToday = (lastProcessedDay != localStruct.day_of_year);
+
+    return isTargetTime && notProcessedToday;
+  }
+
+private:
+  // Calculate line end time
+  static datetime CalculateEndTime(datetime candleTime, int endHour, int timeOffset)
+  {
+    // Get candle's local date
+    datetime localCandleTime = TimeEngine::ApplyOffset(candleTime, timeOffset);
+    MqlDateTime endStruct;
+    TimeEngine::ToStruct(localCandleTime, endStruct);
+
+    // Set end hour in local time
+    endStruct.hour = endHour;
+    endStruct.min = 0;
+    endStruct.sec = 0;
+
+    return StructToTime(endStruct);
+  }
+};
+
+int ProcessORB::lastProcessedDay = 0;
