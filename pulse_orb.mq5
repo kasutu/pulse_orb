@@ -141,6 +141,7 @@ void OnTick()
   if (dashboard != NULL)
   {
     dashboard.UpdateETA(todayTarget, currentLocal);
+    dashboard.UpdateTimeZoneInfo(InpTimeOffset);
 
     //--- Register ETA display if not already registered
     string etaObjectName = dashboard.GetETAObjectName();
@@ -158,20 +159,17 @@ void OnTick()
 
     //--- Get the time of the just-closed candle (bar index 1)
     datetime closedCandleTime = iTime(_Symbol, PERIOD_M15, 1);
-    datetime closedCandleLocal = closedCandleTime + (InpTimeOffset * 3600);
-
     MqlDateTime closedCandleStruct;
-    TimeToStruct(closedCandleLocal, closedCandleStruct);
+    TimeToStruct(closedCandleTime, closedCandleStruct); // Use GMT/UTC
 
-    Print("ORB Stage: 15-min candle closed at ", TimeToString(closedCandleTime), " GMT (",
-          TimeToString(closedCandleLocal), " Local) - Hour: ", closedCandleStruct.hour,
+    Print("ORB Stage: 15-min candle closed at ", TimeToString(closedCandleTime), " GMT - Hour: ", closedCandleStruct.hour,
           " Min: ", closedCandleStruct.min);
 
-    //--- Check if this is the target candle (starts at InpStartHour:00)
+    //--- Check if this is the target candle (starts at InpStartHour:00 UTC)
     if (closedCandleStruct.hour == InpStartHour && closedCandleStruct.min == 0 &&
         lastProcessedDay != closedCandleStruct.day_of_year)
     {
-      Print("ORB Stage: Target candle detected - Processing ORB for ", TimeToString(closedCandleTime));
+      Print("ORB Stage: Target candle detected at UTC - Processing ORB for ", TimeToString(closedCandleTime));
       ProcessORB(closedCandleTime, closedCandleStruct.day_of_year);
     }
   }

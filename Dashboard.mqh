@@ -12,6 +12,7 @@ class CDashboard
 private:
   string m_prefix;
   string m_etaObjectName;
+  string m_tzObjectName;
 
 public:
   //--- Constructor
@@ -19,6 +20,36 @@ public:
   {
     m_prefix = prefix;
     m_etaObjectName = m_prefix + "ETA_Display";
+    m_tzObjectName = m_prefix + "TZ_Display";
+  }
+  //--- Update Timezone/Chart Time display
+  void UpdateTimeZoneInfo(int offset)
+  {
+    datetime gmt = TimeGMT();
+    datetime local = gmt + (offset * 3600);
+    MqlDateTime gmtStruct, localStruct;
+    TimeToStruct(gmt, gmtStruct);
+    TimeToStruct(local, localStruct);
+
+    string tzText = StringFormat(
+        "Chart Time: %04d-%02d-%02d %02d:%02d GMT\nLocal Time: %04d-%02d-%02d %02d:%02d (UTC%+d)",
+        gmtStruct.year, gmtStruct.mon, gmtStruct.day, gmtStruct.hour, gmtStruct.min,
+        localStruct.year, localStruct.mon, localStruct.day, localStruct.hour, localStruct.min,
+        offset);
+
+    if (!ObjectCreate(0, m_tzObjectName, OBJ_LABEL, 0, 0, 0))
+    {
+      ObjectSetString(0, m_tzObjectName, OBJPROP_TEXT, tzText);
+    }
+    else
+    {
+      ObjectSetString(0, m_tzObjectName, OBJPROP_TEXT, tzText);
+      ObjectSetInteger(0, m_tzObjectName, OBJPROP_CORNER, CORNER_LEFT_LOWER);
+      ObjectSetInteger(0, m_tzObjectName, OBJPROP_XDISTANCE, 10);
+      ObjectSetInteger(0, m_tzObjectName, OBJPROP_YDISTANCE, 20);
+      ObjectSetInteger(0, m_tzObjectName, OBJPROP_COLOR, clrAqua);
+      ObjectSetInteger(0, m_tzObjectName, OBJPROP_FONTSIZE, 12);
+    }
   }
 
   //--- Destructor
@@ -58,16 +89,17 @@ public:
       ObjectSetString(0, m_etaObjectName, OBJPROP_TEXT, etaText);
       ObjectSetInteger(0, m_etaObjectName, OBJPROP_CORNER, CORNER_LEFT_LOWER);
       ObjectSetInteger(0, m_etaObjectName, OBJPROP_XDISTANCE, 10);
-      ObjectSetInteger(0, m_etaObjectName, OBJPROP_YDISTANCE, 30);
+      ObjectSetInteger(0, m_etaObjectName, OBJPROP_YDISTANCE, 35);
       ObjectSetInteger(0, m_etaObjectName, OBJPROP_COLOR, clrYellow);
       ObjectSetInteger(0, m_etaObjectName, OBJPROP_FONTSIZE, 12);
     }
   }
 
-  //--- Remove ETA display
+  //--- Remove ETA and TZ display
   void RemoveETA()
   {
     ObjectDelete(0, m_etaObjectName);
+    ObjectDelete(0, m_tzObjectName);
   }
 
   //--- Get ETA object name for registry
