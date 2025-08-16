@@ -19,9 +19,9 @@
 ORBSettings orbCfg = {0.1, 10, 12345, 6.0, PERIOD_M15};
 
 //--- Input Parameters
-input int InpStartHour = 5;      // Start hour in local time (24-hour format)
+input int InpStartHour = 6;      // Start hour in local time (24-hour format)
 input int InpTimeOffset = 0;     // Time offset from local time (-4 for EDT, -5 for EST)
-input int InpEndHour = 3;        // End hour for horizontal lines (24-hour format)
+input int InpEndHour = 24;        // End hour for horizontal lines (24-hour format)
 input int InpLookbackBars = 400; // Number of bars to look back for historical ORB ranges
 
 //--- Object registry
