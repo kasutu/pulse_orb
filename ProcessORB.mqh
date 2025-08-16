@@ -69,6 +69,8 @@ public:
     datetime localTime = TimeEngine::ApplyOffset(candleTime, timeOffset);
     TimeEngine::ToStruct(localTime, localStruct);
 
+    Print("CHECK TIME STRUCT: ", localStruct.hour, ":", startHour);
+
     bool isTargetTime = (localStruct.hour == startHour && localStruct.min == 0);
     bool notProcessedToday = (lastProcessedDay != localStruct.day_of_year);
 

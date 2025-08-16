@@ -14,7 +14,7 @@
 #include "ProcessORB.mqh"
 
 //--- Input Parameters
-input int InpStartHour = 8;      // Start hour in local time (24-hour format)
+input int InpStartHour = 5;      // Start hour in local time (24-hour format)
 input int InpTimeOffset = 0;    // Time offset from local time (-4 for EDT, -5 for EST)
 input int InpEndHour = 17;       // End hour for horizontal lines (24-hour format)
 input int InpLookbackBars = 400; // Number of bars to look back for historical ORB ranges
