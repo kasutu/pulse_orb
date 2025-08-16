@@ -15,14 +15,34 @@
 #include "VolumeConfirmationEngine.mqh"
 #include "ORBTradeEntry.mqh"
 
+//--- ORB input parameters
+input double InpLotSize = 0.01;              // Trade volume (lots)
+input double InpSlippage = 10;               // Max price deviation (points)
+input int InpMagicNumber = 12345;            // EA magic number
+input double InpRRRatio = 6.0;               // Risk:Reward multiplier
+input ENUM_TIMEFRAMES InpOrbTf = PERIOD_M15; // ORB timeframe
+input double InpEntryBuffer = 0.5;           // Acceptance zone (risk * entryBuffer)
+input int InpEMAPeriod = 50;                 // EMA period
+input ENUM_TIMEFRAMES InpEMATf = PERIOD_M15; // EMA timeframe
+
 //--- entry settings
-ORBSettings orbCfg = {0.1, 10, 12345, 6.0, PERIOD_M15};
+ORBSettings orbCfg =
+    {
+        InpLotSize,
+        InpSlippage,
+        InpMagicNumber,
+        InpRRRatio,
+        InpOrbTf,
+        InpEntryBuffer,
+        InpEMAPeriod,
+        InpEMATf};
 
 //--- Input Parameters
-input int InpStartHour = 8;      // Start hour in local time (24-hour format)
-input int InpTimeOffset = 0;     // Time offset from local time (-4 for EDT, -5 for EST)
-input int InpEndHour = 24;        // End hour for horizontal lines (24-hour format)
-input int InpLookbackBars = 400; // Number of bars to look back for historical ORB ranges
+input int InpStartHour = 8;        // Start hour in local time (24-hour format)
+input int InpTimeOffset = 0;       // Time offset from local time (-4 for EDT, -5 for EST)
+input int InpEndHour = 24;         // End hour for horizontal lines (24-hour format)
+input int InpLookbackBars = 400;   // Number of bars to look back for historical ORB ranges
+input bool InpShowDashboard = true; // Show dashboard
 
 //--- Object registry
 string objectRegistry[];
@@ -152,7 +172,7 @@ void OnTick()
   datetime todayTarget = StructToTime(todayTargetStruct);
 
   //--- Update dashboard with ETA
-  if (dashboard != NULL)
+  if (dashboard != NULL && InpShowDashboard)
   {
     dashboard.UpdateETA(todayTarget, currentLocal);
     dashboard.UpdateTimeZoneInfo(InpTimeOffset);
