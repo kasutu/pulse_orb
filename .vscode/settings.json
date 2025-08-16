@@ -24,5 +24,6 @@
   "python.analysis.disabled": true,
   "python.linting.enabled": false,
   "bracketPairColorizer.enabled": false,
-  "rainbow_csv.enable_rainbow_csv_for_all_files": false
+  "rainbow_csv.enable_rainbow_csv_for_all_files": false,
+  "C_Cpp.errorSquiggles": "disabled"
 }

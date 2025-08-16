@@ -14,12 +14,11 @@
 #include "ObjectRegistry.mqh"
 
 //--- Input Parameters
-// This allows you to change the lookback period from the EA's settings window.
-input int InpLookback = 10; // Number of bars to look back from the current bar.
+input int InpLookback = 100;         // Number of bars to look back from the current bar.
+input double InpLineHeight = 1000.0; // Height of the vertical line in pips
 
 //--- Global Constants
 const string OBJECT_PREFIX = "PulseLine_"; // A unique prefix for objects created by this EA.
-const double PIPS_HEIGHT = 100.0;          // The desired height of the line in pips.
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -76,9 +75,9 @@ void OnTick()
   double targetClose = iClose(_Symbol, _Period, targetBarIndex);
 
   //--- Calculate the top and bottom price points for the vertical line.
-  //    It will be centered around the target bar's closing price.
-  double priceTop = targetClose + (PIPS_HEIGHT / 2.0) * pipValue;
-  double priceBottom = targetClose - (PIPS_HEIGHT / 2.0) * pipValue;
+  double heightInPrice = InpLineHeight * pipValue;
+  double priceTop = targetClose + heightInPrice / 2.0;
+  double priceBottom = targetClose - heightInPrice / 2.0;
 
   //--- Create a unique name for our line object (KISS: prefix + time).
   string objectName = OBJECT_PREFIX + (string)targetTime;
