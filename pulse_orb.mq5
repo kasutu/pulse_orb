@@ -6,22 +6,56 @@
 #property copyright "kasutufx"
 #property link "https://www.mql5.com"
 #property version "1.01"
-#property description "Draw vertical line at 6AM NY time"
+#property description "Draw horizontal ORB lines based on configurable time range"
+
+//--- Include dashboard
+#include "Dashboard.mqh"
 
 //--- Input Parameters
-input int InpNYHour = 6;        // Target hour in New York time (24-hour format)
-input int InpNYOffset = -4;     // NY offset from GMT (-4 for EDT, -5 for EST)
-input int InpRangeMinutes = 15; // Minutes to calculate price range for line height
+input int InpStartHour = 6;     // Start hour in local time (24-hour format)
+input int InpTimeOffset = -4;   // Time offset from GMT (-4 for EDT, -5 for EST)
+input int InpRangeMinutes = 15; // Minutes to calculate price range
+input int InpEndHour = 17;      // End hour for horizontal lines (24-hour format)
 
 //--- Object registry
 string objectRegistry[];
 int objectCount = 0;
+const string EA_PREFIX = "ORB_"; // Prefix for all EA objects
+
+//--- Dashboard instance
+CDashboard *dashboard;
+
+//+------------------------------------------------------------------+
+//| Add object to registry                                           |
+//+------------------------------------------------------------------+
+void RegisterObject(string objectName)
+{
+  ArrayResize(objectRegistry, objectCount + 1);
+  objectRegistry[objectCount] = objectName;
+  objectCount++;
+}
+
+//+------------------------------------------------------------------+
+//| Check if object exists in registry                               |
+//+------------------------------------------------------------------+
+bool ObjectExistsInRegistry(string objectName)
+{
+  for (int i = 0; i < objectCount; i++)
+  {
+    if (objectRegistry[i] == objectName)
+      return true;
+  }
+  return false;
+}
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
 {
+  //--- Initialize dashboard
+  dashboard = new CDashboard(EA_PREFIX);
+
   //--- Rebuild registry from existing objects on chart
   objectCount = 0;
   ArrayResize(objectRegistry, 0);
@@ -30,11 +64,9 @@ int OnInit()
   for (int i = 0; i < totalObjects; i++)
   {
     string objName = ObjectName(0, i);
-    if (StringFind(objName, "VLine_") == 0)
+    if (StringFind(objName, EA_PREFIX) == 0)
     {
-      ArrayResize(objectRegistry, objectCount + 1);
-      objectRegistry[objectCount] = objName;
-      objectCount++;
+      RegisterObject(objName);
     }
   }
 
@@ -45,13 +77,18 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
+  //--- Clean up dashboard
+  if (dashboard != NULL)
+  {
+    delete dashboard;
+    dashboard = NULL;
+  }
+
   //--- Clean up all registered objects when EA is removed
   for (int i = 0; i < objectCount; i++)
   {
     ObjectDelete(0, objectRegistry[i]);
   }
-  //--- Remove ETA display
-  ObjectDelete(0, "ETA_Display");
   ChartRedraw();
 }
 //+------------------------------------------------------------------+
@@ -62,63 +99,40 @@ void OnTick()
   //--- Track last processed day to avoid duplicates
   static int lastProcessedDay = 0;
 
-  //--- Get current GMT time and calculate NY time
+  //--- Get current GMT time and calculate local time
   datetime currentGMT = TimeGMT();
-  datetime currentNY = currentGMT + (InpNYOffset * 3600);
+  datetime currentLocal = currentGMT + (InpTimeOffset * 3600);
 
-  MqlDateTime nyStruct;
-  TimeToStruct(currentNY, nyStruct);
+  MqlDateTime localStruct;
+  TimeToStruct(currentLocal, localStruct);
 
-  //--- Calculate next target time (today's or tomorrow's 6 AM NY)
-  datetime nextTargetNY = currentNY;
-  MqlDateTime targetStruct = nyStruct;
-  targetStruct.hour = InpNYHour;
-  targetStruct.min = 0;
-  targetStruct.sec = 0;
+  //--- Calculate next target time (today's or tomorrow's start hour)
+  MqlDateTime todayTargetStruct = localStruct;
+  todayTargetStruct.hour = InpStartHour;
+  todayTargetStruct.min = 0;
+  todayTargetStruct.sec = 0;
+  datetime todayTarget = StructToTime(todayTargetStruct);
 
-  if (nyStruct.hour >= InpNYHour) // If past today's target, use tomorrow
+  //--- Update dashboard with ETA
+  if (dashboard != NULL)
   {
-    nextTargetNY += 24 * 3600; // Add 24 hours
-    TimeToStruct(nextTargetNY, targetStruct);
-    targetStruct.hour = InpNYHour;
-    targetStruct.min = 0;
-    targetStruct.sec = 0;
-  }
+    dashboard.UpdateETA(InpStartHour, InpEndHour, currentLocal, todayTarget);
 
-  nextTargetNY = StructToTime(targetStruct);
-
-  //--- Calculate and display ETA
-  int etaSeconds = (int)(nextTargetNY - currentNY);
-  int etaHours = etaSeconds / 3600;
-  int etaMinutes = (etaSeconds % 3600) / 60;
-  etaSeconds = etaSeconds % 60;
-
-  string etaText = StringFormat("ETA to %dAM NY: %02d:%02d:%02d", InpNYHour, etaHours, etaMinutes, etaSeconds);
-
-  //--- Create or update ETA display
-  if (!ObjectCreate(0, "ETA_Display", OBJ_LABEL, 0, 0, 0))
-  {
-    ObjectSetString(0, "ETA_Display", OBJPROP_TEXT, etaText);
-  }
-  else
-  {
-    ObjectSetString(0, "ETA_Display", OBJPROP_TEXT, etaText);
-    ObjectSetInteger(0, "ETA_Display", OBJPROP_CORNER, CORNER_LEFT_LOWER);
-    ObjectSetInteger(0, "ETA_Display", OBJPROP_XDISTANCE, 10);
-    ObjectSetInteger(0, "ETA_Display", OBJPROP_YDISTANCE, 30);
-    ObjectSetInteger(0, "ETA_Display", OBJPROP_COLOR, clrYellow);
-    ObjectSetInteger(0, "ETA_Display", OBJPROP_FONTSIZE, 12);
+    //--- Register ETA display if not already registered
+    string etaObjectName = dashboard.GetETAObjectName();
+    if (!ObjectExistsInRegistry(etaObjectName))
+      RegisterObject(etaObjectName);
   }
 
   //--- Exit if already processed today or before target hour
-  if (lastProcessedDay == nyStruct.day_of_year || nyStruct.hour < InpNYHour)
+  if (lastProcessedDay == localStruct.day_of_year || localStruct.hour < InpStartHour)
   {
     ChartRedraw();
     return;
   }
 
-  //--- Calculate target GMT time (6 AM NY converted to GMT)
-  datetime targetGMT = currentGMT - (nyStruct.hour - InpNYHour) * 3600 - nyStruct.min * 60 - nyStruct.sec;
+  //--- Calculate target GMT time (start hour converted to GMT)
+  datetime targetGMT = currentGMT - (localStruct.hour - InpStartHour) * 3600 - localStruct.min * 60 - localStruct.sec;
 
   //--- Find closest bar and get its data
   int barIndex = iBarShift(_Symbol, _Period, targetGMT, true);
@@ -160,41 +174,51 @@ void OnTick()
     }
   }
 
-  //--- Create line object
-  string objectName = "VLine_" + TimeToString(barTime, TIME_DATE);
+  //--- Create horizontal line objects
+  MqlDateTime endStruct = localStruct;
+  endStruct.hour = InpEndHour;
+  endStruct.min = 0;
+  endStruct.sec = 0;
+  datetime endLocalTime = StructToTime(endStruct);
+  datetime lineEndTime = endLocalTime - (InpTimeOffset * 3600); // Convert local end time to GMT
 
-  //--- Check if this line already exists
-  bool lineExists = false;
-  for (int i = 0; i < objectCount; i++)
-  {
-    if (objectRegistry[i] == objectName)
-    {
-      lineExists = true;
-      break;
-    }
-  }
+  string highLineName = EA_PREFIX + "High_" + TimeToString(barTime, TIME_DATE);
+  string lowLineName = EA_PREFIX + "Low_" + TimeToString(barTime, TIME_DATE);
 
-  if (lineExists)
+  //--- Check if these lines already exist in registry
+  if (ObjectExistsInRegistry(highLineName) || ObjectExistsInRegistry(lowLineName))
   {
-    lastProcessedDay = nyStruct.day_of_year;
+    lastProcessedDay = localStruct.day_of_year;
     return;
   }
 
-  if (!ObjectCreate(0, objectName, OBJ_TREND, 0, barTime, highestPrice, barTime, lowestPrice))
+  //--- Create high horizontal line
+  if (!ObjectCreate(0, highLineName, OBJ_TREND, 0, barTime, highestPrice, lineEndTime, highestPrice))
     return;
 
-  //--- Set line properties
-  ObjectSetInteger(0, objectName, OBJPROP_COLOR, clrDodgerBlue);
-  ObjectSetInteger(0, objectName, OBJPROP_WIDTH, 2);
-  ObjectSetInteger(0, objectName, OBJPROP_RAY_LEFT, false);
-  ObjectSetInteger(0, objectName, OBJPROP_RAY_RIGHT, false);
+  //--- Set high line properties
+  ObjectSetInteger(0, highLineName, OBJPROP_COLOR, clrBlue);
+  ObjectSetInteger(0, highLineName, OBJPROP_WIDTH, 2);
+  ObjectSetInteger(0, highLineName, OBJPROP_RAY_LEFT, false);
+  ObjectSetInteger(0, highLineName, OBJPROP_RAY_RIGHT, false);
+  ObjectSetInteger(0, highLineName, OBJPROP_STYLE, STYLE_SOLID);
+
+  //--- Create low horizontal line
+  if (!ObjectCreate(0, lowLineName, OBJ_TREND, 0, barTime, lowestPrice, lineEndTime, lowestPrice))
+    return;
+
+  //--- Set low line properties
+  ObjectSetInteger(0, lowLineName, OBJPROP_COLOR, clrRed);
+  ObjectSetInteger(0, lowLineName, OBJPROP_WIDTH, 2);
+  ObjectSetInteger(0, lowLineName, OBJPROP_RAY_LEFT, false);
+  ObjectSetInteger(0, lowLineName, OBJPROP_RAY_RIGHT, false);
+  ObjectSetInteger(0, lowLineName, OBJPROP_STYLE, STYLE_SOLID);
 
   //--- Add to registry
-  ArrayResize(objectRegistry, objectCount + 1);
-  objectRegistry[objectCount] = objectName;
-  objectCount++;
+  RegisterObject(highLineName);
+  RegisterObject(lowLineName);
 
-  lastProcessedDay = nyStruct.day_of_year;
+  lastProcessedDay = localStruct.day_of_year;
   ChartRedraw();
 }
 //+------------------------------------------------------------------+
