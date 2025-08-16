@@ -32,7 +32,7 @@ public:
     TimeToStruct(local, localStruct);
 
     string tzText = StringFormat(
-        "Chart Time: %04d-%02d-%02d %02d:%02d GMT\nLocal Time: %04d-%02d-%02d %02d:%02d (UTC%+d)",
+        "GMT: %04d-%02d-%02d %02d:%02d | Local: %04d-%02d-%02d %02d:%02d (UTC%+d)",
         gmtStruct.year, gmtStruct.mon, gmtStruct.day, gmtStruct.hour, gmtStruct.min,
         localStruct.year, localStruct.mon, localStruct.day, localStruct.hour, localStruct.min,
         offset);
