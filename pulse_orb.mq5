@@ -12,8 +12,11 @@
 #include "LineDrawer.mqh"
 #include "TimeEngine.mqh"
 #include "ProcessORB.mqh"
-
+#include "VolumeConfirmationEngine.mqh"
 #include "ORBTradeEntry.mqh"
+
+//--- entry settings
+ORBSettings orbCfg = {0.1, 10, 12345, 6.0, PERIOD_M15};
 
 //--- Input Parameters
 input int InpStartHour = 5;      // Start hour in local time (24-hour format)
@@ -31,6 +34,8 @@ CDashboard *dashboard;
 
 //--- Line drawer instance
 CLineDrawer *lineDrawer;
+
+VolumeConfirmationEngine *volumeConfirmationEngine;
 
 //+------------------------------------------------------------------+
 //| Add object to registry                                           |
@@ -60,6 +65,8 @@ bool ObjectExistsInRegistry(string objectName)
 //+------------------------------------------------------------------+
 int OnInit()
 {
+  volumeConfirmationEngine = new VolumeConfirmationEngine();
+
   //--- Initialize dashboard
   dashboard = new CDashboard(EA_PREFIX);
 
@@ -135,7 +142,7 @@ void OnTick()
   datetime currentLocal = TimeEngine::GetLocal(InpTimeOffset);
   MqlDateTime localStruct;
   TimeEngine::ToStruct(currentLocal, localStruct);
-  ORBTradeEntry(InpTimeOffset, EA_PREFIX);
+  ORBTradeEntry(InpTimeOffset, EA_PREFIX, orbCfg);
 
   //--- Calculate next target time (today's or tomorrow's start hour)
   MqlDateTime todayTargetStruct = localStruct;
@@ -149,6 +156,7 @@ void OnTick()
   {
     dashboard.UpdateETA(todayTarget, currentLocal);
     dashboard.UpdateTimeZoneInfo(InpTimeOffset);
+    dashboard.UpdateVolumeConfirmation(volumeConfirmationEngine.GetVolumeComparisonString());
 
     //--- Register ETA display if not already registered
     string etaObjectName = dashboard.GetETAObjectName();

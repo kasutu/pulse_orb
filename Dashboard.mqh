@@ -100,13 +100,15 @@ public:
 
   void UpdateVolumeConfirmation(string volumeText)
   {
+    string volumeLabel = "Volume: " + volumeText;
+
     if (!ObjectCreate(0, m_volumeObjectName, OBJ_LABEL, 0, 0, 0))
     {
-      ObjectSetString(0, m_volumeObjectName, OBJPROP_TEXT, volumeText);
+      ObjectSetString(0, m_volumeObjectName, OBJPROP_TEXT, volumeLabel);
     }
     else
     {
-      ObjectSetString(0, m_volumeObjectName, OBJPROP_TEXT, volumeText);
+      ObjectSetString(0, m_volumeObjectName, OBJPROP_TEXT, volumeLabel);
       ObjectSetInteger(0, m_volumeObjectName, OBJPROP_CORNER, CORNER_LEFT_LOWER);
       ObjectSetInteger(0, m_volumeObjectName, OBJPROP_XDISTANCE, 10);
       ObjectSetInteger(0, m_volumeObjectName, OBJPROP_YDISTANCE, 50);
