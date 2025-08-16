@@ -12,6 +12,8 @@
 #include "Dashboard.mqh"
 //--- Include line drawer
 #include "LineDrawer.mqh"
+//--- Include centralized time engine
+#include "TimeEngine.mqh"
 
 //--- Input Parameters
 input int InpStartHour = 1;   // Start hour in local time (24-hour format)
@@ -116,13 +118,12 @@ void OnTick()
   //--- Track 15-minute candle closes
   static datetime lastM15CandleTime = 0;
 
-  //--- Get current GMT time and calculate local time
-  MqlDateTime gmtStruct;
-  datetime currentGMT = TimeGMT(gmtStruct);
-  datetime currentLocal = currentGMT + (InpTimeOffset * 3600);
-
-  MqlDateTime localStruct;
-  TimeToStruct(currentLocal, localStruct);
+  //--- Get current GMT and local time using TimeEngine
+  datetime currentGMT = TimeEngine::GetGMT();
+  datetime currentLocal = TimeEngine::GetLocal(InpTimeOffset);
+  MqlDateTime gmtStruct, localStruct;
+  TimeEngine::ToStruct(currentGMT, gmtStruct);
+  TimeEngine::ToStruct(currentLocal, localStruct);
 
   //--- Reset lastProcessedDay when InpEndHour is reached
   if (localStruct.hour >= InpEndHour && localStruct.hour < InpStartHour)
@@ -140,7 +141,7 @@ void OnTick()
   //--- Update dashboard with ETA
   if (dashboard != NULL)
   {
-    dashboard.UpdateETA(todayTarget, currentLocal);
+    dashboard.UpdateETA(todayTarget, currentGMT);
     dashboard.UpdateTimeZoneInfo(InpTimeOffset);
 
     //--- Register ETA display if not already registered
@@ -150,7 +151,7 @@ void OnTick()
   }
 
   //--- Check for new 15-minute candle close
-  datetime currentM15CandleTime = iTime(_Symbol, PERIOD_M15, 0);
+  datetime currentM15CandleTime = TimeEngine::BarOpen(_Symbol, PERIOD_M15, 0);
   bool newM15Candle = (currentM15CandleTime != lastM15CandleTime);
 
   if (newM15Candle)
@@ -158,9 +159,9 @@ void OnTick()
     lastM15CandleTime = currentM15CandleTime;
 
     //--- Get the time of the just-closed candle (bar index 1)
-    datetime closedCandleTime = iTime(_Symbol, PERIOD_M15, 1);
+    datetime closedCandleTime = TimeEngine::BarOpen(_Symbol, PERIOD_M15, 1);
     MqlDateTime closedCandleStruct;
-    TimeToStruct(closedCandleTime, closedCandleStruct); // Use GMT/UTC
+    TimeEngine::ToStruct(closedCandleTime, closedCandleStruct); // Use GMT/UTC
 
     Print("ORB Stage: 15-min candle closed at ", TimeToString(closedCandleTime), " GMT - Hour: ", closedCandleStruct.hour,
           " Min: ", closedCandleStruct.min);
@@ -185,10 +186,10 @@ void ProcessORB(datetime candleTime, int dayOfYear)
   static int lastProcessedDay = 0;
 
   //--- Get current local time for line end calculation
-  datetime currentGMT = TimeGMT();
-  datetime currentLocal = currentGMT + (InpTimeOffset * 3600);
+  datetime currentGMT = TimeEngine::GetGMT();
+  datetime currentLocal = TimeEngine::GetLocal(InpTimeOffset);
   MqlDateTime localStruct;
-  TimeToStruct(currentLocal, localStruct);
+  TimeEngine::ToStruct(currentLocal, localStruct);
 
   //--- Find the closed 15-minute bar and get its data
   int barIndex = iBarShift(_Symbol, PERIOD_M15, candleTime, true);
