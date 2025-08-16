@@ -116,7 +116,7 @@ void OnTick()
   //--- Update dashboard with ETA
   if (dashboard != NULL)
   {
-    dashboard.UpdateETA(InpStartHour, InpEndHour, currentLocal, todayTarget);
+    dashboard.UpdateETA(todayTarget, currentLocal);
 
     //--- Register ETA display if not already registered
     string etaObjectName = dashboard.GetETAObjectName();

@@ -28,44 +28,25 @@ public:
   }
 
   //--- Update ETA display
-  void UpdateETA(int startHour, int endHour, datetime currentLocal, datetime todayTarget)
+  void UpdateETA(datetime targetTime, datetime currentLocal)
   {
-    //--- Get current local time structure
-    MqlDateTime currentStruct;
-    TimeToStruct(currentLocal, currentStruct);
+    //--- Calculate remaining seconds until target
+    int remainingSeconds = (int)(targetTime - currentLocal);
 
-    //--- Calculate end time for today's session
-    MqlDateTime endStruct = currentStruct;
-    endStruct.hour = endHour;
-    endStruct.min = 0;
-    endStruct.sec = 0;
-    datetime todayEnd = StructToTime(endStruct);
-
-    string prefix;
-    int etaSeconds;
-
-    if (currentStruct.hour >= startHour && currentStruct.hour < endHour)
+    //--- If target time has passed, calculate next day's target
+    if (remainingSeconds <= 0)
     {
-      //--- During session - countdown to end
-      etaSeconds = (int)(todayEnd - currentLocal);
-      prefix = "Pulse T+"; // T for Time countdown
-    }
-    else
-    {
-      //--- Before session start - countdown to start
-      etaSeconds = (int)(todayTarget - currentLocal);
-      prefix = "Pulse T-";
+      //--- Add 24 hours (86400 seconds) to get next day's target
+      datetime nextTarget = targetTime + 86400;
+      remainingSeconds = (int)(nextTarget - currentLocal);
     }
 
-    //--- Ensure positive values for display
-    if (etaSeconds < 0)
-      etaSeconds = -etaSeconds;
+    //--- Convert to HH:MM:SS format
+    int hours = remainingSeconds / 3600;
+    int minutes = (remainingSeconds % 3600) / 60;
+    int seconds = remainingSeconds % 60;
 
-    int etaHours = etaSeconds / 3600;
-    int etaMinutes = (etaSeconds % 3600) / 60;
-    etaSeconds = etaSeconds % 60;
-
-    string etaText = StringFormat("%s%02d:%02d:%02d", prefix, etaHours, etaMinutes, etaSeconds);
+    string etaText = StringFormat("Next ORB: %02dh:%02dm:%02ds", hours, minutes, seconds);
 
     //--- Create or update ETA display
     if (!ObjectCreate(0, m_etaObjectName, OBJ_LABEL, 0, 0, 0))
