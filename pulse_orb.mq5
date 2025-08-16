@@ -14,7 +14,7 @@
 #include "LineDrawer.mqh"
 
 //--- Input Parameters
-input int InpStartHour = 6;   // Start hour in local time (24-hour format)
+input int InpStartHour = 1;   // Start hour in local time (24-hour format)
 input int InpTimeOffset = -4; // Time offset from GMT (-4 for EDT, -5 for EST)
 input int InpEndHour = 17;    // End hour for horizontal lines (24-hour format)
 
@@ -113,12 +113,22 @@ void OnTick()
   //--- Track last processed day to avoid duplicates
   static int lastProcessedDay = 0;
 
+  //--- Track 15-minute candle closes
+  static datetime lastM15CandleTime = 0;
+
   //--- Get current GMT time and calculate local time
-  datetime currentGMT = TimeGMT();
+  MqlDateTime gmtStruct;
+  datetime currentGMT = TimeGMT(gmtStruct);
   datetime currentLocal = currentGMT + (InpTimeOffset * 3600);
 
   MqlDateTime localStruct;
   TimeToStruct(currentLocal, localStruct);
+
+  //--- Reset lastProcessedDay when InpEndHour is reached
+  if (localStruct.hour >= InpEndHour && localStruct.hour < InpStartHour)
+  {
+    lastProcessedDay = 0;
+  }
 
   //--- Calculate next target time (today's or tomorrow's start hour)
   MqlDateTime todayTargetStruct = localStruct;
@@ -138,41 +148,66 @@ void OnTick()
       RegisterObject(etaObjectName);
   }
 
-  //--- Exit if already processed today or before target hour
-  if (lastProcessedDay == localStruct.day_of_year || localStruct.hour < InpStartHour)
+  //--- Check for new 15-minute candle close
+  datetime currentM15CandleTime = iTime(_Symbol, PERIOD_M15, 0);
+  bool newM15Candle = (currentM15CandleTime != lastM15CandleTime);
+
+  if (newM15Candle)
   {
-    ChartRedraw();
-    return;
+    lastM15CandleTime = currentM15CandleTime;
+
+    //--- Get the time of the just-closed candle (bar index 1)
+    datetime closedCandleTime = iTime(_Symbol, PERIOD_M15, 1);
+    datetime closedCandleLocal = closedCandleTime + (InpTimeOffset * 3600);
+
+    MqlDateTime closedCandleStruct;
+    TimeToStruct(closedCandleLocal, closedCandleStruct);
+
+    Print("ORB Stage: 15-min candle closed at ", TimeToString(closedCandleTime), " GMT (",
+          TimeToString(closedCandleLocal), " Local) - Hour: ", closedCandleStruct.hour,
+          " Min: ", closedCandleStruct.min);
+
+    //--- Check if this is the target candle (starts at InpStartHour:00)
+    if (closedCandleStruct.hour == InpStartHour && closedCandleStruct.min == 0 &&
+        lastProcessedDay != closedCandleStruct.day_of_year)
+    {
+      Print("ORB Stage: Target candle detected - Processing ORB for ", TimeToString(closedCandleTime));
+      ProcessORB(closedCandleTime, closedCandleStruct.day_of_year);
+    }
   }
 
-  //--- Calculate target GMT time (start hour converted to GMT)
-  datetime targetGMT = currentGMT - (localStruct.hour - InpStartHour) * 3600 - localStruct.min * 60 - localStruct.sec;
+  ChartRedraw();
+}
 
-  Print("ORB Debug - Current GMT: ", TimeToString(currentGMT),
-        " Current Local: ", TimeToString(currentLocal),
-        " Target GMT: ", TimeToString(targetGMT));
+//+------------------------------------------------------------------+
+//| Process ORB for the closed 15-minute candle                     |
+//+------------------------------------------------------------------+
+void ProcessORB(datetime candleTime, int dayOfYear)
+{
+  static int lastProcessedDay = 0;
 
-  //--- Find closest bar and get its data
-  int barIndex = iBarShift(_Symbol, _Period, targetGMT, true);
+  //--- Get current local time for line end calculation
+  datetime currentGMT = TimeGMT();
+  datetime currentLocal = currentGMT + (InpTimeOffset * 3600);
+  MqlDateTime localStruct;
+  TimeToStruct(currentLocal, localStruct);
+
+  //--- Find the closed 15-minute bar and get its data
+  int barIndex = iBarShift(_Symbol, PERIOD_M15, candleTime, true);
   if (barIndex < 0)
   {
-    Print("ERROR: Could not find bar for target time: ", TimeToString(targetGMT));
+    Print("ERROR: Could not find 15-minute bar for candle time: ", TimeToString(candleTime));
     return;
   }
 
-  datetime barTime = iTime(_Symbol, _Period, barIndex);
-  Print("ORB Debug - Found bar at index ", barIndex, " with time: ", TimeToString(barTime));
+  datetime barTime = iTime(_Symbol, PERIOD_M15, barIndex);
+  Print("ORB Stage: Target 15-min bar located at index ", barIndex, " - Next: Extract OHLC data from closed candle at ", TimeToString(barTime));
 
-  //--- Get OHLC of the 15-minute bar
-  double highestPrice = iHigh(_Symbol, _Period, barIndex);
-  double lowestPrice = iLow(_Symbol, _Period, barIndex);
-  double openPrice = iOpen(_Symbol, _Period, barIndex);
-  double closePrice = iClose(_Symbol, _Period, barIndex);
-
-  Print("ORB Debug - 15min OHLC: Open=", DoubleToString(openPrice, _Digits),
-        " High=", DoubleToString(highestPrice, _Digits),
-        " Low=", DoubleToString(lowestPrice, _Digits),
-        " Close=", DoubleToString(closePrice, _Digits));
+  //--- Get OHLC of the closed 15-minute bar
+  double highestPrice = iHigh(_Symbol, PERIOD_M15, barIndex);
+  double lowestPrice = iLow(_Symbol, PERIOD_M15, barIndex);
+  double openPrice = iOpen(_Symbol, PERIOD_M15, barIndex);
+  double closePrice = iClose(_Symbol, PERIOD_M15, barIndex);
 
   //--- Create horizontal line objects
   MqlDateTime endStruct = localStruct;
@@ -182,10 +217,13 @@ void OnTick()
   datetime endLocalTime = StructToTime(endStruct);
   datetime lineEndTime = endLocalTime - (InpTimeOffset * 3600); // Convert local end time to GMT
 
+  Print("ORB Stage: OHLC data extracted from CLOSED candle - Next: Create horizontal lines from ", TimeToString(barTime), " to ", TimeToString(lineEndTime),
+        " | High=", DoubleToString(highestPrice, _Digits), " Low=", DoubleToString(lowestPrice, _Digits));
+
   //--- Check if lines already exist using line drawer
   if (lineDrawer != NULL && lineDrawer.LinesExist(barTime))
   {
-    lastProcessedDay = localStruct.day_of_year;
+    lastProcessedDay = dayOfYear;
     return;
   }
 
@@ -194,10 +232,9 @@ void OnTick()
   {
     if (lineDrawer.DrawLines(barTime, highestPrice, lowestPrice, lineEndTime))
     {
-      lastProcessedDay = localStruct.day_of_year;
+      lastProcessedDay = dayOfYear;
+      Print("ORB Stage: Lines created successfully for ", TimeToString(candleTime), " - Processing complete");
     }
   }
-
-  ChartRedraw();
 }
 //+------------------------------------------------------------------+
