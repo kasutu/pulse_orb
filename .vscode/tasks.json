@@ -1,0 +1,49 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Compile MQL5",
+            "type": "shell",
+            "command": "MetaEditor64.exe",
+            "args": [
+                "/compile:${file}",
+                "/log"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": {
+                "owner": "mql5",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(.*)\\((\\d+),(\\d+)\\)\\s*:\\s*(warning|error)\\s*(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            }
+        },
+        {
+            "label": "Open in MetaEditor",
+            "type": "shell",
+            "command": "MetaEditor64.exe",
+            "args": ["${file}"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "never",
+                "focus": false,
+                "panel": "shared"
+            }
+        }
+    ]
+}

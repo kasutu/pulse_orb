@@ -1,0 +1,28 @@
+{
+  "files.associations": {
+    "*.mq4": "cpp",
+    "*.mq5": "cpp",
+    "*.mqh": "cpp"
+  },
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "files.encoding": "utf8",
+  "files.eol": "\r\n",
+  "editor.suggest.snippetsPreventQuickSuggestions": false,
+  "editor.wordBasedSuggestions": "off",
+  "editor.quickSuggestions": {
+    "other": true,
+    "comments": false,
+    "strings": false
+  },
+  "editor.renderWhitespace": "none",
+  "editor.guides.indentation": false,
+  "editor.guides.highlightActiveIndentation": false,
+  "indentRainbow.enabled": false,
+  "python.defaultInterpreterPath": "",
+  "python.analysis.disabled": true,
+  "python.linting.enabled": false,
+  "bracketPairColorizer.enabled": false,
+  "rainbow_csv.enable_rainbow_csv_for_all_files": false
+}

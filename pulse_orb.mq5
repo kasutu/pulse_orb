@@ -86,8 +86,8 @@ void OnTick()
   //--- To ensure only one line is on the chart, delete any old lines first.
   ClearByPrefix(0, OBJECT_PREFIX);
 
-  //--- Create the vertical line using OBJ_VLINE for proper vertical line display.
-  if (!ObjectCreate(0, objectName, OBJ_VLINE, 0, targetTime, 0))
+  //--- Create a finite vertical line using OBJ_TREND with start and end points.
+  if (!ObjectCreate(0, objectName, OBJ_TREND, 0, targetTime, priceTop, targetTime, priceBottom))
   {
     Print("Error creating vertical line object: ", GetLastError());
     return;
