@@ -50,6 +50,16 @@ public:
     return (sma > 0 && vol >= sma * m_factor);
   }
 
+  // Return ratio currentVolume / SMA20 (0 if not available)
+  double GetVolumeRatio(int volume_shift = 0) const
+  {
+    double sma = VolumeSMA(20, volume_shift);
+    long vol = iVolume(_Symbol, m_timeframe, volume_shift);
+    if (sma <= 0)
+      return 0.0;
+    return (double)vol / sma;
+  }
+
   // Returns the volume comparison as a string
   string GetVolumeComparisonString(int volume_shift = 0)
   {
